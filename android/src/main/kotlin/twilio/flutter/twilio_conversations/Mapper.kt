@@ -25,6 +25,24 @@ object Mapper {
         return result
     }
 
+    /**
+     * Reads an [Attributes] value that the Twilio SDK may fail to parse.
+     *
+     * UserImpl.getAttributes() and its siblings feed the raw attributes
+     * string straight into a JSONTokener, which throws
+     * NullPointerException when the entity has no attributes at all.
+     * Anything thrown from inside a listener escapes into Twilio's
+     * RethrowingForwarder, which promotes it to a FATAL ListenerException
+     * -- so a single user with null attributes crashes the whole app on
+     * subscribe. Treat an unreadable value as "no attributes" instead.
+     */
+    private fun safeAttributes(read: () -> Attributes): Attributes =
+        try {
+            read()
+        } catch (e: Exception) {
+            Attributes()
+        }
+
     fun attributesToPigeon(attributes: Attributes): Api.AttributesData {
         val result = Api.AttributesData()
         result.type = attributes.type.toString()
@@ -85,7 +103,7 @@ object Mapper {
         result.synchronizationStatus = conversation.synchronizationStatus.toString()
         result.uniqueName = conversation.uniqueName
 
-        result.attributes = attributesToPigeon(conversation.attributes)
+        result.attributes = attributesToPigeon(safeAttributes { conversation.attributes })
 
         return result
     }
@@ -107,7 +125,7 @@ object Mapper {
         result.type = message.type.toString()
         result.media = mediaToPigeon(message)
         result.hasMedia = message.hasMedia()
-        result.attributes = attributesToPigeon(message.attributes)
+        result.attributes = attributesToPigeon(safeAttributes { message.attributes })
         return result
     }
 
@@ -131,7 +149,7 @@ object Mapper {
         result.dateUpdated = participant.dateUpdated
         result.identity = participant.identity
         result.type = participant.type.toString()
-        result.attributes = attributesToPigeon(participant.attributes)
+        result.attributes = attributesToPigeon(safeAttributes { participant.attributes })
         return result
     }
 
@@ -140,7 +158,7 @@ object Mapper {
         val result = Api.UserData()
 
         result.friendlyName = user.friendlyName
-        result.attributes = attributesToPigeon(user.attributes)
+        result.attributes = attributesToPigeon(safeAttributes { user.attributes })
         result.identity = user.identity
         result.isOnline = user.isOnline
         result.isNotifiable = user.isNotifiable
