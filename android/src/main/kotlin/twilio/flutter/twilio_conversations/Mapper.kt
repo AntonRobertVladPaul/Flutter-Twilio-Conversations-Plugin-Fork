@@ -3,7 +3,7 @@ package twilio.flutter.twilio_conversations
 import com.twilio.conversations.Attributes
 import com.twilio.conversations.Conversation
 import com.twilio.conversations.ConversationsClient
-import com.twilio.conversations.ErrorInfo
+import com.twilio.util.ErrorInfo
 import com.twilio.conversations.Message
 import com.twilio.conversations.Participant
 import com.twilio.conversations.User
@@ -117,14 +117,14 @@ object Mapper {
         result.dateUpdated = dateToString(message.dateUpdatedAsDate)
         result.lastUpdatedBy = message.lastUpdatedBy
         result.subject = message.subject
-        result.messageBody = message.messageBody
+        result.messageBody = message.body
         result.conversationSid = message.conversation.sid
         result.participantSid = message.participantSid
 //        result.participant = participantToMap(message.participant)
         result.messageIndex = message.messageIndex
-        result.type = message.type.toString()
+        result.type = messageTypeOf(message)
         result.media = mediaToPigeon(message)
-        result.hasMedia = message.hasMedia()
+        result.hasMedia = message.attachedMedia.isNotEmpty()
         result.attributes = attributesToPigeon(safeAttributes { message.attributes })
         return result
     }
@@ -148,7 +148,7 @@ object Mapper {
         result.dateCreated = participant.dateCreated
         result.dateUpdated = participant.dateUpdated
         result.identity = participant.identity
-        result.type = participant.type.toString()
+        result.type = participantTypeOf(participant.channel)
         result.attributes = attributesToPigeon(safeAttributes { participant.attributes })
         return result
     }
@@ -172,16 +172,40 @@ object Mapper {
         return dateFormat.format(date)
     }
 
-    fun mediaToPigeon(message: Message): Api.MessageMediaData? {
-        if (!message.hasMedia()) {
-            return null
+    /**
+     * Twilio 3.0 removed Message.Type: a message is a media message when it has
+     * attached media. The Dart side still parses the 1.x enum names
+     * (MessageType.TEXT / MessageType.MEDIA), so keep emitting exactly those.
+     */
+    private fun messageTypeOf(message: Message): String =
+        if (message.attachedMedia.isEmpty()) "TEXT" else "MEDIA"
+
+    /**
+     * Twilio 4.0 replaced Participant.Type with a free-form channel string
+     * ("chat", "sms", "whatsapp", ...). The Dart side still parses the 1.x enum
+     * names (UNSET, OTHER, CHAT, SMS, WHATSAPP), so map back onto them.
+     */
+    private fun participantTypeOf(channel: String?): String =
+        when (channel?.lowercase()) {
+            null, "" -> "UNSET"
+            "chat" -> "CHAT"
+            "sms" -> "SMS"
+            "whatsapp" -> "WHATSAPP"
+            else -> "OTHER"
         }
 
+    /**
+     * Twilio 3.0 allows several media per message; the Dart API models one,
+     * as 1.x did, so expose the first attached media.
+     */
+    fun mediaToPigeon(message: Message): Api.MessageMediaData? {
+        val media = message.attachedMedia.firstOrNull() ?: return null
+
         val result = Api.MessageMediaData()
-        result.sid = message.mediaSid
-        result.fileName = message.mediaFileName
-        result.type = message.mediaType
-        result.size = message.mediaSize
+        result.sid = media.sid
+        result.fileName = media.filename
+        result.type = media.contentType
+        result.size = media.size
         result.conversationSid = message.conversationSid
         result.messageIndex = message.messageIndex
         result.messageSid = message.sid

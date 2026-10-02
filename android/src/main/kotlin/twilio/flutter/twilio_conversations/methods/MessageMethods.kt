@@ -2,7 +2,7 @@ package twilio.flutter.twilio_conversations.methods
 
 import com.twilio.conversations.CallbackListener
 import com.twilio.conversations.Conversation
-import com.twilio.conversations.ErrorInfo
+import com.twilio.util.ErrorInfo
 import com.twilio.conversations.Message
 import com.twilio.conversations.StatusListener
 import twilio.flutter.twilio_conversations.Api
@@ -29,7 +29,11 @@ class MessageMethods : Api.MessageApi {
             override fun onSuccess(conversation: Conversation) {
                 conversation.getMessageByIndex(messageIndex, object : CallbackListener<Message> {
                     override fun onSuccess(message: Message) {
-                        message.getMediaContentTemporaryUrl(object : CallbackListener<String> {
+                        // Twilio 3.0 moved the temporary URL onto the media itself;
+                        // the Dart API models one media per message, as 1.x did.
+                        val media = message.attachedMedia.firstOrNull()
+                            ?: return result.error(NotFoundException("Message has no media"))
+                        media.getTemporaryContentUrl(object : CallbackListener<String> {
                             override fun onSuccess(url: String) {
                                 debug("getMediaContentTemporaryUrl => onSuccess $url")
                                 result.success(url)
@@ -146,7 +150,7 @@ class MessageMethods : Api.MessageApi {
             override fun onSuccess(conversation: Conversation) {
                 conversation.getMessageByIndex(messageIndex, object : CallbackListener<Message> {
                     override fun onSuccess(message: Message) {
-                        message.updateMessageBody(messageBody, object : StatusListener {
+                        message.updateBody(messageBody, object : StatusListener {
                             override fun onSuccess() {
                                 debug("updateMessageBody => onSuccess")
                                 result.success(null)

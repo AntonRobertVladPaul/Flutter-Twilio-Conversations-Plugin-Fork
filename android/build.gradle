@@ -2,7 +2,7 @@ group 'twilio.flutter.twilio_conversations'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.8.0'
+    ext.kotlin_version = '1.9.22'
     repositories {
         google()
         mavenCentral()
@@ -32,7 +32,7 @@ android {
         main.java.srcDirs += 'src/main/kotlin'
     }
     defaultConfig {
-        minSdkVersion 19
+        minSdkVersion 21
     }
     lintOptions {
         disable 'InvalidPackage'
@@ -44,8 +44,13 @@ android {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-    implementation 'com.twilio:conversations-android:1.6.0'
+    // 6.x: the first line whose native library (libtwilio-convo-native.so) is
+    // 16 KB page-aligned, which Google Play requires for updates from
+    // 2027-02-01. 1.6.0 shipped it 4 KB-aligned. 6.x also moved to ktor 2.x and
+    // needs kotlinx-coroutines >= 1.7.3, so apps no longer have to pin
+    // coroutines to 1.6.4 for 1.6.0's bundled ktor 1.6.0.
+    implementation 'com.twilio:conversations-android:6.2.1'
 
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.4.2"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
     implementation "androidx.multidex:multidex:2.0.1"
 }

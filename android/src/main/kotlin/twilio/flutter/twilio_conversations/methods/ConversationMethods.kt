@@ -1,7 +1,7 @@
 import com.twilio.conversations.Attributes
 import com.twilio.conversations.CallbackListener
 import com.twilio.conversations.Conversation
-import com.twilio.conversations.ErrorInfo
+import com.twilio.util.ErrorInfo
 import com.twilio.conversations.Message
 import com.twilio.conversations.StatusListener
 import java.io.FileInputStream
@@ -142,59 +142,33 @@ class ConversationMethods : Api.ConversationApi {
         val client = TwilioConversationsPlugin.client
             ?: return result.error(ClientNotInitializedException("Client is not initialized"))
 
-        val messageOptions = Message.options()
-        if (options.body != null) {
-            messageOptions.withBody(options.body as String)
+        // Everything that can throw (attributes conversion, opening the file)
+        // happens HERE, before any Twilio callback, exactly where 1.x built its
+        // Message.Options: Twilio promotes an exception thrown inside one of its
+        // listeners to a fatal ListenerException, which would crash the app
+        // instead of failing this call.
+        val attributes = options.attributes?.let { Mapper.pigeonToAttributes(it) }
+        val inputPath = options.inputPath
+        val mimeType = options.mimeType
+        if (inputPath != null && mimeType == null) {
+            return result.error(MissingParameterException("Missing 'mimeType' in MessageOptions"))
         }
-
-        if (options.attributes != null) {
-            messageOptions.withAttributes(
-                Mapper.pigeonToAttributes(options.attributes))
-        }
-
-        if (options.inputPath != null) {
-            val input = options.inputPath as String
-            val mimeType = options.mimeType as String?
-                ?: return result.error(MissingParameterException("Missing 'mimeType' in MessageOptions"))
-
-            messageOptions.withMedia(FileInputStream(input), mimeType)
-            if (options.filename != null) {
-                messageOptions.withMediaFileName(options.filename as String)
-            }
-
-            // TODO: implement MediaProgressListener
-//            if (options.mediaProgressListenerId != null) {
-//                messageOptions.withMediaProgressListener(object : ProgressListener() {
-//                    override fun onStarted() {
-//                        TwilioConversationsPlugin.mediaProgressSink?.success({
-//                            "mediaProgressListenerId" to options["mediaProgressListenerId"]
-//                            "name" to "started"
-//                        })
-//                    }
-//
-//                    override fun onProgress(bytes: Long) {
-//                        TwilioConversationsPlugin.mediaProgressSink?.success({
-//                            "mediaProgressListenerId" to options["mediaProgressListenerId"]
-//                            "name" to "progress"
-//                            "data" to bytes
-//                        })
-//                    }
-//
-//                    override fun onCompleted(mediaSid: String) {
-//                        TwilioConversationsPlugin.mediaProgressSink?.success({
-//                            "mediaProgressListenerId" to options["mediaProgressListenerId"]
-//                            "name" to "completed"
-//                            "data" to mediaSid
-//                        })
-//                    }
-//                })
-//            }
-        }
+        val mediaStream = inputPath?.let { FileInputStream(it) }
 
         try {
             client.getConversation(conversationSid, object : CallbackListener<Conversation> {
                 override fun onSuccess(conversation: Conversation) {
-                    conversation.sendMessage(messageOptions, object : CallbackListener<Message> {
+                    // Twilio 3.0 replaced Message.Options + sendMessage(options)
+                    // with prepareMessage(). A message may now carry body AND
+                    // media; the Dart side still sends one or the other.
+                    val builder = conversation.prepareMessage()
+                    options.body?.let { builder.setBody(it) }
+                    attributes?.let { builder.setAttributes(it) }
+                    if (mediaStream != null && mimeType != null) {
+                        // TODO: implement MediaProgressListener (no listener, as in 1.x).
+                        builder.addMedia(mediaStream, mimeType, options.filename, null)
+                    }
+                    builder.buildAndSend(object : CallbackListener<Message> {
                         override fun onSuccess(message: Message) {
                             debug("sendMessage => onSuccess")
                             val messageData = Mapper.messageToPigeon(message)
