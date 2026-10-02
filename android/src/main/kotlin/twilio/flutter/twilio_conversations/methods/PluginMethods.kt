@@ -27,6 +27,10 @@ class PluginMethods : Api.PluginApi {
         debug("create => jwtToken: $jwtToken")
         val props = ConversationsClient.Properties.newBuilder()
             .setRegion(properties.region)
+            // Twilio 6.0 cut the default command timeout from 90 s to 10 s.
+            // Keep 1.x behaviour: on a slow or reconnecting network a send that
+            // took 10-90 s used to succeed and would now fail.
+            .setCommandTimeout(90_000)
             .createProperties()
 
         ConversationsClient.create(TwilioConversationsPlugin.applicationContext, jwtToken, props, object :

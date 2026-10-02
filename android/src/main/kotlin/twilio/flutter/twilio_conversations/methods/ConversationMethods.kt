@@ -142,11 +142,11 @@ class ConversationMethods : Api.ConversationApi {
         val client = TwilioConversationsPlugin.client
             ?: return result.error(ClientNotInitializedException("Client is not initialized"))
 
-        // Everything that can throw (attributes conversion, opening the file)
-        // happens HERE, before any Twilio callback, exactly where 1.x built its
-        // Message.Options: Twilio promotes an exception thrown inside one of its
-        // listeners to a fatal ListenerException, which would crash the app
-        // instead of failing this call.
+        // Attribute conversion and opening the file happen HERE, before any
+        // Twilio callback, exactly where 1.x built its Message.Options: Twilio
+        // promotes an exception thrown inside one of its listeners to a fatal
+        // ListenerException, which would crash the app instead of failing this
+        // call.
         val attributes = options.attributes?.let { Mapper.pigeonToAttributes(it) }
         val inputPath = options.inputPath
         val mimeType = options.mimeType
@@ -161,7 +161,18 @@ class ConversationMethods : Api.ConversationApi {
                     // Twilio 3.0 replaced Message.Options + sendMessage(options)
                     // with prepareMessage(). A message may now carry body AND
                     // media; the Dart side still sends one or the other.
-                    val builder = conversation.prepareMessage()
+                    //
+                    // prepareMessage() throws IllegalStateException while the
+                    // conversation is not synchronized (1.x's sendMessage did
+                    // the same). This runs inside Twilio's callback, so fail
+                    // the call instead of letting it become a fatal
+                    // ListenerException.
+                    val builder = try {
+                        conversation.prepareMessage()
+                    } catch (err: IllegalStateException) {
+                        debug("sendMessage => prepareMessage failed: ${err.message}")
+                        return result.error(err)
+                    }
                     options.body?.let { builder.setBody(it) }
                     attributes?.let { builder.setAttributes(it) }
                     if (mediaStream != null && mimeType != null) {

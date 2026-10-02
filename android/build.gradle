@@ -46,11 +46,12 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     // 6.x: the first line whose native library (libtwilio-convo-native.so) is
     // 16 KB page-aligned, which Google Play requires for updates from
-    // 2027-02-01. 1.6.0 shipped it 4 KB-aligned. 6.x also moved to ktor 2.x and
-    // needs kotlinx-coroutines >= 1.7.3, so apps no longer have to pin
-    // coroutines to 1.6.4 for 1.6.0's bundled ktor 1.6.0.
+    // 2027-02-01. 1.6.0 shipped it 4 KB-aligned. 6.2.x depends on ktor 3.1.2,
+    // whose own floor is kotlinx-coroutines 1.10.1, so apps must NOT pin
+    // coroutines to 1.6.4 any more (that pin existed only for the ktor 1.6.0
+    // bundled with Twilio 1.6.0).
     implementation 'com.twilio:conversations-android:6.2.1'
 
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
     implementation "androidx.multidex:multidex:2.0.1"
 }
